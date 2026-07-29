@@ -1,0 +1,220 @@
+// =============================================================================
+// Eventify — Prisma Schema
+// Multi-tenant schema with shared tables and RLS-based isolation.
+// Migrations: run as eventify_admin (superuser, bypasses RLS)
+// Runtime queries: run as eventify_app (subject to RLS policies)
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// User
+// An authenticated identity in the system. Exists independently of any
+// Organization. Can hold Memberships in many Organizations simultaneously.
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email           String   @unique
+  passwordHash    String   @map("password_hash")
+  firstName       String   @map("first_name")
+  lastName        String   @map("last_name")
+  isEmailVerified Boolean  @default(false) @map("is_email_verified")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  memberships   OrganizationMembership[]
+  refreshTokens RefreshToken[]
+  registrations Registration[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Organization
+// A tenant in the system. The top-level entity that owns Events and contains
+// Members. All data isolation is scoped to an Organization via RLS.
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  memberships OrganizationMembership[]
+  events      Event[]
+  invitations Invitation[]
+
+  @@map("organizations")
+}
+
+// ---------------------------------------------------------------------------
+// OrganizationMembership
+// The association between a User and an Organization, carrying exactly one
+// Role. A User has at most one Membership per Organization.
+// NOT RLS-protected — queried during tenant context resolution before the
+// tenant is known.
+// ---------------------------------------------------------------------------
+
+model OrganizationMembership {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  role           Role
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("organization_memberships")
+}
+
+// ---------------------------------------------------------------------------
+// Invitation
+// A pending invitation to join an Organization by email.
+// Becomes a Membership upon acceptance.
+// ---------------------------------------------------------------------------
+
+model Invitation {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  invitedByUserId String   @map("invited_by_user_id") @db.Uuid
+  email          String
+  role           Role      @default(MEMBER)
+  acceptedAt     DateTime? @map("accepted_at")
+  expiresAt      DateTime  @map("expires_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@map("invitations")
+}
+
+// ---------------------------------------------------------------------------
+// RefreshToken
+// Stores a SHA-256 hash of the issued refresh token for validation.
+// The raw token is only ever sent to the client — never stored.
+// ---------------------------------------------------------------------------
+
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  userId    String    @map("user_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Event
+// A tech event owned by an Organization. organization_id is the tenant
+// discriminator — RLS filters all Event queries by this column.
+// ---------------------------------------------------------------------------
+
+model Event {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  title          String
+  slug           String
+  description    String?     @db.Text
+  location       String?
+  startDate      DateTime    @map("start_date")
+  endDate        DateTime    @map("end_date")
+  status         EventStatus @default(DRAFT)
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  deletedAt      DateTime?   @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticketTypes  TicketType[]
+
+  // Slug is unique per organization, not globally
+  @@unique([organizationId, slug])
+  // Efficient tenant-scoped status filtering
+  @@index([organizationId, status])
+  @@map("events")
+}
+
+// ---------------------------------------------------------------------------
+// TicketType
+// Defines the pricing, capacity, and tiers of tickets available for an Event.
+// ---------------------------------------------------------------------------
+
+model TicketType {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId   String    @map("event_id") @db.Uuid
+  name      String
+  price     Decimal   @db.Decimal(10, 2)
+  capacity  Int
+  sold      Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrations Registration[]
+
+  @@map("ticket_types")
+}
+
+// ---------------------------------------------------------------------------
+// Registration
+// An attendee booking record for an Event ticket type.
+// ---------------------------------------------------------------------------
+
+model Registration {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticketTypeId    String             @map("ticket_type_id") @db.Uuid
+  userId          String             @map("user_id") @db.Uuid
+  status          RegistrationStatus @default(PENDING)
+  paymentIntentId String?            @map("payment_intent_id")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("registrations")
+}

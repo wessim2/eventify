@@ -1,0 +1,17 @@
+{
+  "name": "eventify",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter @eventify/api dev",
+    "build:api": "pnpm --filter @eventify/api build",
+    "test:api": "pnpm --filter @eventify/api test",
+    "test:e2e": "pnpm --filter @eventify/api test:e2e",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

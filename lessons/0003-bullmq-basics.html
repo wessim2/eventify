@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 3: Introduction to BullMQ</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <h1>Lesson 3: Introduction to BullMQ (Asynchronous Tasks)</h1>
+  
+  <p>In this lesson, we will explore what BullMQ is, why it is essential for cloud-native applications, and how it divides work between Producers and Workers.</p>
+  
+  <h2>1. What is a Message Queue?</h2>
+  <p>In a standard web app, when a user makes a request (like registering), the server executes the code synchronously and returns a response. If the code does something slow—like sending an email or connecting to a third-party gateway—the user is forced to wait for that process to finish.</p>
+  
+  <p>A <b>Message Queue</b> solves this. It lets you offload slow, heavy, or non-blocking tasks to run in the background. The server places a "Job" (or message) into a queue and immediately returns a success response to the user. A separate background process then pulls the job and runs it asynchronously.</p>
+
+  <h2>2. Anatomy of BullMQ</h2>
+  <p>BullMQ is a popular Node.js message queue library backed by <b>Redis</b>. It consists of three primary roles:</p>
+  
+  <pre><code>[ Producer ]  --(adds Job)-->  [ Redis Queue ]  --(pulls Job)-->  [ Worker/Processor ]</code></pre>
+  
+  <ul>
+    <li><b>Producer</b>: Your API controllers or services. They create jobs with a payload (e.g., <code>{ email: 'user@test.com', type: 'WELCOME' }</code>) and add them to a named queue.</li>
+    <li><b>Queue (Redis)</b>: Redis acts as the fast, in-memory data store that holds the jobs, tracks their states (active, completed, delayed, failed), and guarantees that no jobs are lost.</li>
+    <li><b>Worker/Processor</b>: Background Node.js processes. They listen to a queue, pick up jobs, execute the business logic (like calling an SMTP server), and mark the job as finished.</li>
+  </ul>
+
+  <h2>3. Why Use BullMQ? (The Core Utilities)</h2>
+  <p>BullMQ provides several essential production utilities out-of-the-box:</p>
+  <ul>
+    <li><b>Resiliency & Retries</b>: If a background worker fails (e.g. because an external email provider is down), you can configure BullMQ to retry the job 3 times with <i>exponential backoff</i> (waiting longer between each retry).</li>
+    <li><b>Rate Limiting</b>: You can limit the number of jobs processed per second to avoid getting blocked by third-party APIs.</li>
+    <li><b>Repeatable/Scheduled Jobs</b>: You can set up cron-like schedules (e.g., "Run this cleanup task every 15 minutes"). We used this in Phase 1 for our <code>event-lifecycle</code> repeatable job to automatically mark past-due events as completed.</li>
+    <li><b>Decoupling</b>: The API server doesn't need to know <i>how</i> to send emails or run lifecycle cleanups; it only needs to know how to add jobs to the queue. The worker handles the rest.</li>
+  </ul>
+
+  <h2>4. Our Codebase Reference</h2>
+  <p>Here is how we added a welcome verification email job during user registration:</p>
+  <pre><code>// 1. The Producer adds a job to the email queue:
+await this.emailQueue.add(
+  EmailJobType.VERIFICATION_EMAIL,
+  { userId: user.id, email: user.email, verificationToken },
+  { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
+);
+
+// 2. The Worker listens and processes the job:
+@Processor(QueueName.EMAIL)
+export class EmailProcessor extends WorkerHost {
+  async process(job: Job) {
+    if (job.name === EmailJobType.VERIFICATION_EMAIL) {
+      // Send email simulation
+      console.log(`Sending email to ${job.data.email}`);
+    }
+  }
+}</code></pre>
+
+  <div class="quiz-container">
+    <h3>Quick Check: Retrieval Practice</h3>
+    <p><b>Q1: Why is Redis required when running BullMQ?</b></p>
+    <div class="quiz-option" onclick="alert('Incorrect: Redis stores the jobs and their states, it does not execute them.')">A) Redis executes the Javascript code for the background jobs.</div>
+    <div class="quiz-option" onclick="alert('Correct! Redis serves as the fast, persistent, in-memory message broker that stores and manages job states.')">B) Redis acts as the persistent, fast message broker storing and tracking jobs.</div>
+    <div class="quiz-option" onclick="alert('Incorrect: Node.js handles Webpack bundling.')">C) Redis is used by Webpack to bundle our typescript files.</div>
+  </div>
+
+  <div class="footer">
+    <p>Recommended source to explore: <a href="https://docs.bullmq.io/" target="_blank">BullMQ Official Documentation</a>.</p>
+    <p>Ask follow-up questions to your AI coding assistant to deepen your understanding!</p>
+  </div>
+</body>
+</html>

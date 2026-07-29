@@ -1,0 +1,5 @@
+# Shared-Schema Multi-Tenancy with PostgreSQL Row-Level Security
+
+We use a single shared database schema for all tenants, with a `tenant_id` (Organization ID) discriminator column on every tenant-scoped table. Data isolation is enforced at the database level via PostgreSQL Row-Level Security (RLS) policies that filter on a session variable (`app.current_tenant_id`) set by the API's TenantMiddleware on every request.
+
+We considered database-per-tenant (strongest isolation, highest operational cost) and schema-per-tenant (moderate isolation, complex migrations at scale). Shared schema was chosen because it keeps a single migration pipeline, works naturally with connection pooling, and is the simplest to operate in a Kubernetes environment. RLS pushes the isolation guarantee into the database rather than relying solely on application-level `WHERE` clauses, providing defense-in-depth. The trade-off is weaker isolation boundaries — a bug in RLS policy configuration could leak data across tenants — which we mitigate with integration tests that explicitly verify cross-tenant isolation.

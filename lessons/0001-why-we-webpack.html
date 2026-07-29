@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 1: Why We Webpack</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <h1>Lesson 1: Why We Webpack (Bundling in a Monorepo)</h1>
+  
+  <p>In this lesson, we will explore why we enabled Webpack in NestJS, what dependencies we added, and the mechanics of monorepo bundling.</p>
+  
+  <h2>1. What is Webpack?</h2>
+  <p>Webpack is a static module bundler. In modern JavaScript/TypeScript, files import other files (using CommonJS <code>require</code> or ESM <code>import</code>). Webpack traces the graph of imports starting from an entry file (e.g. <code>src/main.ts</code>) and aggregates them into one or more bundled files (like <code>dist/main.js</code>).</p>
+
+  <h2>2. The Problem: Nested Dist Directory</h2>
+  <p>In a standard monorepo workspace:</p>
+  <pre><code>eventify/
+├── apps/
+│   └── api/ (imports from packages/shared-types)
+└── packages/
+    └── shared-types/</code></pre>
+  <p>By default, the TypeScript compiler (<code>tsc</code>) compiles files individually. Because <code>apps/api</code> imports a file <i>outside</i> its own folder (<code>packages/shared-types</code>), TypeScript shifts the base output directory structure to include both folders, producing: </p>
+  <pre><code>apps/api/dist/
+├── apps/
+│   └── api/
+│       └── src/
+│           └── main.js  <-- Actual Entrypoint
+└── packages/
+    └── shared-types/</code></pre>
+  <p>But NestJS CLI expects the entrypoint directly at <code>dist/main.js</code>. This mismatch crashes the startup process because Node.js cannot find <code>dist/main</code>.</p>
+  
+  <div class="alert">
+    <div class="alert-title">💡 The Webpack Solution</div>
+    By enabling Webpack in <code>nest-cli.json</code>, Webpack bundles the entrypoint and its dependencies, creating a single, flat <code>dist/main.js</code> file instead of preserving folder structures.
+  </div>
+
+  <h2>3. The ESM Resolution Crash (Node 22)</h2>
+  <p>When Webpack compiles the server, by default it treats local workspace packages (like <code>@eventify/shared-types</code>) as <b>externals</b>. This means Webpack outputs a standard reference:</p>
+  <pre><code>const shared_types = require("@eventify/shared-types");</code></pre>
+  <p>At runtime, Node 22 resolves <code>@eventify/shared-types</code> to the raw source file <code>packages/shared-types/src/index.ts</code>. Because Node 22 has native TypeScript stripping support, it attempts to load that file directly. However, Node's native TS execution handles TypeScript files as <b>ES Modules (ESM)</b>.</p>
+  <p>In ESM, <b>relative imports must include explicit file extensions</b>. But our index file imported the enums extension-less:</p>
+  <pre><code>export * from './enums/role.enum'; // Missing '.ts' or '.js' extension!</code></pre>
+  <p>This caused Node to throw <code>ERR_MODULE_NOT_FOUND</code>.</p>
+
+  <h2>4. The Fix: webpack-node-externals and inline-bundling</h2>
+  <p>To fix this, we need Webpack to inline-bundle <code>@eventify/shared-types</code> directly inside <code>dist/main.js</code>, so Node never loads the raw <code>.ts</code> source file. We did this by customizing Webpack in <code>webpack.config.js</code> using the <code>webpack-node-externals</code> plugin:</p>
+  <pre><code>const nodeExternals = require('webpack-node-externals');
+
+module.exports = function (options, webpack) {
+  return {
+    ...options,
+    externals: [
+      nodeExternals({
+        // Do not externalize @eventify/shared-types, so Webpack bundles it inline
+        allowlist: ['@eventify/shared-types'],
+      }),
+    ],
+  };
+};</code></pre>
+  <p>By placing <code>@eventify/shared-types</code> in the <code>allowlist</code>, Webpack bundles it inside the final <code>dist/main.js</code>, resolving the extension-less paths correctly at compilation time using Webpack's resolver.</p>
+
+  <div class="quiz-container">
+    <h3>Quick Check: Retrieval Practice</h3>
+    <p><b>Q1: Why did Node 22 fail to resolve the relative import <code>'./enums/role.enum'</code> in <code>packages/shared-types</code>?</b></p>
+    <div class="quiz-option" onclick="alert('Incorrect: The file was present in the filesystem.')">A) The file did not exist in the filesystem.</div>
+    <div class="quiz-option" onclick="alert('Correct! Node 22 runs raw TS files as ES Modules, which strictly require file extensions for relative imports.')">B) ES Modules require explicit file extensions.</div>
+    <div class="quiz-option" onclick="alert('Incorrect: Webpack did not inline-bundle it, it remained externalized.')">C) Webpack bundled it incorrectly inside dist.</div>
+  </div>
+
+  <div class="footer">
+    <p>Recommended source to explore: <a href="https://webpack.js.org/concepts/" target="_blank">Webpack Official Concepts</a>.</p>
+    <p>Ask follow-up questions to your AI coding assistant to deepen your understanding!</p>
+  </div>
+</body>
+</html>

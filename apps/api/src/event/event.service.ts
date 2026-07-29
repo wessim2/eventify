@@ -1,0 +1,172 @@
+import {
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+  Logger,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateEventDto } from './dto/create-event.dto';
+import { UpdateEventDto } from './dto/update-event.dto';
+import { EventStatus } from '@eventify/shared-types';
+
+/**
+ * Valid state machine transitions for Event status.
+ * Key: current status → Value: allowed next statuses
+ */
+const VALID_TRANSITIONS: Record<EventStatus, EventStatus[]> = {
+  [EventStatus.DRAFT]: [EventStatus.PUBLISHED, EventStatus.CANCELLED],
+  [EventStatus.PUBLISHED]: [EventStatus.COMPLETED, EventStatus.CANCELLED],
+  [EventStatus.COMPLETED]: [],
+  [EventStatus.CANCELLED]: [],
+};
+
+@Injectable()
+export class EventService {
+  private readonly logger = new Logger(EventService.name);
+
+  constructor(private readonly prisma: PrismaService) { }
+
+  async create(
+    organizationId: string,
+    dto: CreateEventDto,
+  ) {
+    const slug = await this.generateSlug(organizationId, dto.title);
+
+    return this.prisma.event.create({
+      data: {
+        organizationId,
+        title: dto.title,
+        slug,
+        description: dto.description,
+        location: dto.location,
+        startDate: new Date(dto.startDate),
+        endDate: new Date(dto.endDate),
+        status: EventStatus.DRAFT
+      },
+    });
+  }
+
+  async findAll(
+    organizationId: string,
+    statusFilter?: EventStatus,
+  ) {
+    return this.prisma.event.findMany({
+      where: {
+        organizationId,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...(statusFilter ? { status: statusFilter as any } : {}),
+      },
+      orderBy: { startDate: 'asc' },
+    });
+  }
+
+  async findOne(id: string, organizationId: string) {
+    const event = await this.prisma.event.findFirst({
+      where: { id, organizationId },
+    });
+    if (!event) throw new NotFoundException(`Event ${id} not found`);
+    return event;
+  }
+
+  async update(id: string, organizationId: string, dto: UpdateEventDto) {
+    await this.findOne(id, organizationId);
+    const data: Record<string, unknown> = {};
+    if (dto.title) {
+      data.title = dto.title;
+      data.slug = await this.generateSlug(organizationId, dto.title, id);
+    }
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.location !== undefined) data.location = dto.location;
+    if (dto.startDate) data.startDate = new Date(dto.startDate);
+    if (dto.endDate) data.endDate = new Date(dto.endDate);
+
+    return this.prisma.event.update({ where: { id }, data });
+  }
+
+  async softDelete(id: string, organizationId: string) {
+    await this.findOne(id, organizationId);
+    await this.prisma.event.delete({ where: { id } });
+  }
+
+  /**
+   * Transitions an event's status following the state machine rules.
+   * Rejects invalid transitions with 422 Unprocessable Entity.
+   * Used by both the API controller and the event lifecycle worker.
+   */
+  async transitionStatus(
+    id: string,
+    organizationId: string,
+    newStatus: EventStatus,
+  ) {
+    const event = await this.findOne(id, organizationId);
+    const currentStatus = event.status as unknown as EventStatus;
+
+    const allowed = VALID_TRANSITIONS[currentStatus];
+    if (!allowed.includes(newStatus)) {
+      throw new UnprocessableEntityException(
+        `Cannot transition event from ${currentStatus} to ${newStatus}. ` +
+        `Allowed transitions from ${currentStatus}: [${allowed.join(', ') || 'none'}]`,
+      );
+    }
+
+    return this.prisma.event.update({
+      where: { id },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { status: newStatus as any },
+    });
+  }
+
+  /**
+   * Finds all published events whose end date has passed.
+   * Used by the event lifecycle worker (bypasses tenant context — system-level).
+   */
+  async findPastDuePublishedEvents() {
+    return this.prisma.event.findMany({
+      where: {
+        status: 'PUBLISHED' as any,
+        endDate: { lt: new Date() },
+      },
+    });
+  }
+
+  /**
+   * Transitions a specific event to COMPLETED without tenant validation.
+   * Only called by the event lifecycle worker (system-level, cross-tenant).
+   */
+  async markCompleted(id: string): Promise<void> {
+    await this.prisma.event.update({
+      where: { id },
+      data: { status: 'COMPLETED' as any },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private async generateSlug(
+    organizationId: string,
+    title: string,
+    excludeId?: string,
+  ): Promise<string> {
+    const base = title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-');
+
+    let slug = base;
+    let attempt = 0;
+
+    while (true) {
+      const existing = await this.prisma.event.findFirst({
+        where: { organizationId, slug },
+      });
+      if (!existing || existing.id === excludeId) break;
+      attempt++;
+      slug = `${base}-${attempt}`;
+    }
+
+    return slug;
+  }
+}

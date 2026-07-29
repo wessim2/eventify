@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson 2: Clean Swagger Documentation</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <h1>Lesson 2: Clean Swagger Documentation in NestJS</h1>
+  
+  <p>In this lesson, we will explore how to document Swagger endpoints in NestJS without cluttering your DTOs and Controllers with endless decorators.</p>
+  
+  <h2>1. The Problem: Decorator Bloat</h2>
+  <p>Normally, to document a DTO, you have to decorate every single field with <code>@ApiProperty()</code>:</p>
+  <pre><code>// ❌ Cluttered, boilerplate-heavy DTO
+export class CreateEventDto {
+  @ApiProperty({ description: 'The title of the event', example: 'Keynote' })
+  @IsString()
+  title: string;
+
+  @ApiProperty({ description: 'Start date of the event', example: '2026-10-15T09:00:00Z' })
+  @IsDateString()
+  startDate: string;
+}</code></pre>
+  <p>When you have dozens of DTOs, this metadata completely overwhelms your business logic.</p>
+
+  <h2>2. The Best Practice: The NestJS Swagger CLI Plugin</h2>
+  <p>NestJS provides a compiler plugin that automatically introspects your TypeScript code at build time. It analyzes the type definitions and validation decorators (like <code>@IsString()</code>, <code>@IsOptional()</code>) and automatically injects the corresponding Swagger metadata behind the scenes.</p>
+  
+  <p>With the plugin enabled, your DTO looks completely clean:</p>
+  <pre><code>//  Clean, idiomatic DTO
+export class CreateEventDto {
+  @IsString()
+  title: string;
+
+  @IsDateString()
+  startDate: string;
+}</code></pre>
+  <p>The compiler automatically infers that <code>title</code> is a required string and <code>startDate</code> is a required date-string, mapping them directly to OpenAPI schema properties!</p>
+
+  <h2>3. How to Enable the CLI Plugin</h2>
+  <p>To enable the plugin, add the <code>plugins</code> block to <code>compilerOptions</code> in your <code>nest-cli.json</code> configuration file:</p>
+  <pre><code>{
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "webpack": true,
+    "webpackConfigPath": "webpack.config.js",
+    "plugins": ["@nestjs/swagger"]
+  }
+}</code></pre>
+
+  <h2>4. Keep Controllers Clean</h2>
+  <p>To keep controllers clean, only use high-level decorators at the class or handler levels. Never duplicate request payload metadata that is already in your DTOs:</p>
+  <pre><code>//  Clean Controller Documentation
+@ApiTags('Events')
+@ApiBearerAuth()
+@Controller('events')
+@UseGuards(JwtAuthGuard, TenantGuard)
+export class EventController {
+  
+  @Post()
+  @ApiOperation({ summary: 'Create a new event' })
+  @ApiHeader({ name: 'X-Organization-Id', description: 'Active Tenant ID', required: true })
+  @ApiResponse({ status: 201, description: 'Event successfully created' })
+  create(@Body() dto: CreateEventDto) {
+    // ...
+  }
+}</code></pre>
+
+  <div class="quiz-container">
+    <h3>Quick Check: Retrieval Practice</h3>
+    <p><b>Q1: Where does NestJS's Swagger CLI Plugin source its structural metadata from?</b></p>
+    <div class="quiz-option" onclick="alert('Incorrect: The plugin analyzes the source code before runtime.')">A) Database schemas at runtime.</div>
+    <div class="quiz-option" onclick="alert('Correct! It uses TypeScript compiler AST (type annotations) and validation decorators (class-validator) at build time.')">B) TypeScript type annotations and class-validator decorators at compile time.</div>
+    <div class="quiz-option" onclick="alert('Incorrect: You don\'t need manual decorators for basic properties when the plugin is active.')">C) Manual properties declared in main.ts.</div>
+  </div>
+
+  <div class="footer">
+    <p>Recommended source to explore: <a href="https://docs.nestjs.com/openapi/cli-plugin" target="_blank">NestJS OpenAPI CLI Plugin Guide</a>.</p>
+    <p>Ask follow-up questions to your AI coding assistant to deepen your understanding!</p>
+  </div>
+</body>
+</html>
