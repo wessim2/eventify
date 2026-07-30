@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketService } from '../ticket/ticket.service';
 import { EventStatus, RegistrationStatus } from '@eventify/shared-types';
@@ -85,5 +85,38 @@ export class StorefrontService {
         status: registration.status,
       };
     });
+  }
+
+  /**
+   * Fetches the details and status of a registration.
+   * Asserts that the requesting user owns the registration record.
+   */
+  async getRegistration(registrationId: string, userId: string) {
+    const registration = await this.prisma.registration.findUnique({
+      where: { id: registrationId },
+      include: {
+        ticketType: {
+          select: {
+            name: true,
+            price: true,
+            event: {
+              select: {
+                title: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!registration) {
+      throw new NotFoundException('Registration not found');
+    }
+
+    if (registration.userId !== userId) {
+      throw new ForbiddenException('You do not own this registration');
+    }
+
+    return registration;
   }
 }

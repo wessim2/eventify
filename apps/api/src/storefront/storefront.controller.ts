@@ -60,4 +60,15 @@ export class StorefrontController {
       dto.quantity,
     );
   }
+
+  @Get('registrations/:registrationId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get registration details and status' })
+  getRegistration(
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.storefrontService.getRegistration(registrationId, user.userId);
+  }
 }

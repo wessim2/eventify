@@ -18,6 +18,7 @@ import { EventService } from './event.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { TransitionEventStatusDto } from './dto/transition-event-status.dto';
+import { CreateTicketTypeDto } from '../ticket/dto/create-ticket-type.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -98,6 +99,36 @@ export class EventController {
   ) {
     this.requireTenantContext(req);
     return this.eventService.transitionStatus(id, req.tenantId!, dto.status);
+  }
+
+  @Get(':id/registrations')
+  findRegistrations(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: RequestWithUser,
+  ) {
+    this.requireTenantContext(req);
+    return this.eventService.findRegistrations(id, req.tenantId!);
+  }
+
+  @Post(':id/ticket-types')
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER, Role.ADMIN)
+  createTicketType(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: RequestWithUser,
+    @Body() dto: CreateTicketTypeDto,
+  ) {
+    this.requireTenantContext(req);
+    return this.eventService.createTicketType(id, req.tenantId!, dto);
+  }
+
+  @Get(':id/ticket-types')
+  findTicketTypes(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: RequestWithUser,
+  ) {
+    this.requireTenantContext(req);
+    return this.eventService.findTicketTypes(id, req.tenantId!);
   }
 
   private requireTenantContext(req: RequestWithUser): void {

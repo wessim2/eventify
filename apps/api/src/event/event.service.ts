@@ -169,4 +169,65 @@ export class EventService {
 
     return slug;
   }
+
+  /**
+   * Lists all registrations (attendees) for a specific event.
+   * Asserves tenant ownership of the parent event.
+   */
+  async findRegistrations(eventId: string, organizationId: string) {
+    await this.findOne(eventId, organizationId);
+
+    return this.prisma.registration.findMany({
+      where: {
+        ticketType: {
+          eventId,
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        ticketType: {
+          select: {
+            name: true,
+            price: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Creates a ticket type for a specific event.
+   * Asserts tenant ownership.
+   */
+  async createTicketType(eventId: string, organizationId: string, dto: any) {
+    await this.findOne(eventId, organizationId);
+    return this.prisma.ticketType.create({
+      data: {
+        eventId,
+        name: dto.name,
+        price: dto.price,
+        capacity: dto.capacity,
+      },
+    });
+  }
+
+  /**
+   * Lists all ticket types for a specific event.
+   * Asserts tenant ownership.
+   */
+  async findTicketTypes(eventId: string, organizationId: string) {
+    await this.findOne(eventId, organizationId);
+    return this.prisma.ticketType.findMany({
+      where: { eventId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
 }

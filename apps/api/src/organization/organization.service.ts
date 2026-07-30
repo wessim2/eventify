@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdminPrismaService } from '../prisma/admin-prisma.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
@@ -22,6 +23,7 @@ export class OrganizationService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly adminPrisma: AdminPrismaService,
     @InjectQueue(QueueName.EMAIL) private readonly emailQueue: Queue,
   ) {}
 
@@ -52,16 +54,18 @@ export class OrganizationService {
 
   /** Lists all organizations the user is a member of (not tenant-scoped). */
   async listForUser(userId: string) {
-    const memberships = await this.prisma.organizationMembership.findMany({
+    const memberships = await this.adminPrisma.organizationMembership.findMany({
       where: { userId },
       include: { organization: true },
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return memberships.map((m: any) => ({ ...m.organization, role: m.role }));
+    return memberships
+      .filter((m: any) => m.organization && !m.organization.deletedAt)
+      .map((m: any) => ({ ...m.organization, role: m.role }));
   }
 
   async findById(id: string) {
-    const org = await this.prisma.organization.findUnique({ where: { id } });
+    const org = await this.adminPrisma.organization.findUnique({ where: { id } });
     if (!org) throw new NotFoundException(`Organization ${id} not found`);
     return org;
   }
