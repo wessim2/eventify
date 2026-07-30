@@ -9,3 +9,4 @@ export * from './enums/event-status.enum';
 export * from './enums/queue-names.enum';
 export * from './enums/email-job-type.enum';
 export * from './enums/registration-status.enum';
+export * from './enums/subscription-tier.enum';

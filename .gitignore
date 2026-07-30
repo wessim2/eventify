@@ -38,3 +38,6 @@ coverage/
 
 # TypeScript
 *.tsbuildinfo
+*.md
+
+.agents/

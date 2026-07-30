@@ -31,6 +31,11 @@ enum EventStatus {
   CANCELLED
 }
 
+enum SubscriptionTier {
+  FREE
+  PRO
+}
+
 enum RegistrationStatus {
   PENDING
   CONFIRMED
@@ -68,12 +73,15 @@ model User {
 // ---------------------------------------------------------------------------
 
 model Organization {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name      String
-  slug      String    @unique
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  slug             String           @unique
+  stripeAccountId  String?          @map("stripe_account_id")
+  stripeCustomerId String?          @map("stripe_customer_id")
+  subscriptionTier SubscriptionTier @default(FREE) @map("subscription_tier")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  deletedAt        DateTime?        @map("deleted_at")
 
   memberships OrganizationMembership[]
   events      Event[]

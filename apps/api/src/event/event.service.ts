@@ -109,6 +109,19 @@ export class EventService {
       );
     }
 
+    if (newStatus === EventStatus.PUBLISHED) {
+      const tickets = await this.prisma.ticketType.findMany({ where: { eventId: id } });
+      const hasPaidTickets = tickets.some((t: any) => Number(t.price) > 0);
+      if (hasPaidTickets) {
+        const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+        if (!org?.stripeAccountId) {
+          throw new UnprocessableEntityException(
+            'Cannot publish an event with paid tickets until your organization connects a Stripe account.',
+          );
+        }
+      }
+    }
+
     return this.prisma.event.update({
       where: { id },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

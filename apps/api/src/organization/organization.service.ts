@@ -231,6 +231,75 @@ export class OrganizationService {
   }
 
   // ---------------------------------------------------------------------------
+  // Stripe Connect & Billing Integration
+  // ---------------------------------------------------------------------------
+
+  async createStripeConnectAccount(organizationId: string, userEmail: string) {
+    const org = await this.findById(organizationId);
+    
+    // Fallback/mock URL handling if real Stripe API keys are not configured
+    const stripeSecret = process.env.STRIPE_SECRET_KEY;
+    
+    let stripeAccountId = org.stripeAccountId;
+    let url = `${process.env.DASHBOARD_URL || 'http://localhost:3001'}/dashboard?stripe=connected_mock`;
+
+    if (stripeSecret && stripeSecret.startsWith('sk_')) {
+      try {
+        const Stripe = require('stripe');
+        const stripe = new Stripe(stripeSecret);
+        
+        if (!stripeAccountId) {
+          const account = await stripe.accounts.create({
+            type: 'express',
+            email: userEmail,
+            business_profile: { name: org.name },
+            capabilities: {
+              card_payments: { requested: true },
+              transfers: { requested: true },
+            },
+          });
+          stripeAccountId = account.id;
+          await this.prisma.organization.update({
+            where: { id: organizationId },
+            data: { stripeAccountId },
+          });
+        }
+
+        const accountLink = await stripe.accountLinks.create({
+          account: stripeAccountId,
+          refresh_url: `${process.env.DASHBOARD_URL || 'http://localhost:3001'}/dashboard?stripe=refresh`,
+          return_url: `${process.env.DASHBOARD_URL || 'http://localhost:3001'}/dashboard?stripe=success`,
+          type: 'account_onboarding',
+        });
+        url = accountLink.url;
+      } catch (err: any) {
+        this.logger.error(`Stripe connect creation error: ${err.message}`);
+      }
+    } else {
+      // Mock onboarding flow for dev/local testing without active Stripe API key
+      if (!stripeAccountId) {
+        stripeAccountId = `acct_mock_${randomUUID().substring(0, 8)}`;
+        await this.prisma.organization.update({
+          where: { id: organizationId },
+          data: { stripeAccountId },
+        });
+      }
+    }
+
+    return { url, stripeAccountId };
+  }
+
+  async getStripeStatus(organizationId: string) {
+    const org = await this.findById(organizationId);
+    return {
+      organizationId: org.id,
+      stripeAccountId: org.stripeAccountId,
+      isConnected: !!org.stripeAccountId,
+      subscriptionTier: org.subscriptionTier,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 

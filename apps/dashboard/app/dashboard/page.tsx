@@ -19,13 +19,22 @@ export default function DashboardHomePage() {
   const [orgName, setOrgName] = useState('');
   const [orgSlug, setOrgSlug] = useState('');
 
+  const [stripeStatus, setStripeStatus] = useState<{ isConnected: boolean; stripeAccountId?: string; subscriptionTier?: string } | null>(null);
+  const [connectingStripe, setConnectingStripe] = useState(false);
+
   useEffect(() => {
+    const orgId = localStorage.getItem('eventify_org_id');
     setOrgName(localStorage.getItem('eventify_org_name') || 'Organization');
     setOrgSlug(localStorage.getItem('eventify_org_slug') || '');
+    
     const fetchStats = async () => {
       try {
-        const data = await apiRequest('/events', 'GET');
-        setEvents(data);
+        const [eventsData, stripeData] = await Promise.all([
+          apiRequest('/events', 'GET'),
+          orgId ? apiRequest(`/organizations/${orgId}/stripe/status`, 'GET') : Promise.resolve(null),
+        ]);
+        setEvents(eventsData);
+        if (stripeData) setStripeStatus(stripeData);
       } catch (err) {
         console.error(err);
       } finally {
@@ -34,6 +43,22 @@ export default function DashboardHomePage() {
     };
     fetchStats();
   }, []);
+
+  const handleConnectStripe = async () => {
+    const orgId = localStorage.getItem('eventify_org_id');
+    if (!orgId) return;
+    setConnectingStripe(true);
+    try {
+      const res = await apiRequest(`/organizations/${orgId}/stripe/connect`, 'POST');
+      if (res.url) {
+        window.location.href = res.url;
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to initiate Stripe Connect onboarding');
+    } finally {
+      setConnectingStripe(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -86,6 +111,55 @@ export default function DashboardHomePage() {
             </a>
           )}
         </div>
+      </div>
+
+      {/* Stripe Connect Integration Status Banner */}
+      <div className="card" style={{
+        padding: '1.5rem 1.75rem',
+        backgroundColor: stripeStatus?.isConnected ? '#f0fdf4' : '#fffbe6',
+        border: stripeStatus?.isConnected ? '1px solid #bbf7d0' : '1px solid #ffe58f',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '1rem',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '10px',
+            backgroundColor: stripeStatus?.isConnected ? '#0f766e' : '#d97706',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.25rem',
+          }}>
+            💳
+          </div>
+          <div>
+            <h4 style={{ fontSize: '1.1rem', fontFamily: 'Outfit', margin: 0, color: '#0f172a' }}>
+              {stripeStatus?.isConnected ? 'Stripe Account Connected' : 'Connect Stripe to Receive Ticket Sales Payouts'}
+            </h4>
+            <p style={{ fontSize: '0.875rem', color: '#475569', margin: '0.2rem 0 0 0' }}>
+              {stripeStatus?.isConnected
+                ? `Account Connected (${stripeStatus.stripeAccountId}). You can publish paid ticket tiers.`
+                : 'Connect your Stripe account to enable paid ticket sales and direct automatic bank deposits.'}
+            </p>
+          </div>
+        </div>
+
+        {!stripeStatus?.isConnected && (
+          <button
+            onClick={handleConnectStripe}
+            disabled={connectingStripe}
+            className="btn btn-primary"
+            style={{ backgroundColor: '#6366f1', borderColor: '#4f46e5' }}
+          >
+            {connectingStripe ? 'Connecting to Stripe...' : 'Connect Stripe Account 💳'}
+          </button>
+        )}
       </div>
 
       {/* KPI Stats Grid */}

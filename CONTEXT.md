@@ -59,3 +59,23 @@ _Avoid_: Landing page, public site, marketing site
 **Tenant Context**:
 The active Organization a User is operating within during an API request. Propagated via the `X-Organization-Id` header and used to set the PostgreSQL session variable for Row-Level Security filtering.
 _Avoid_: Active org, current workspace
+
+**Tier**:
+The subscription level of an Organization. One of: Free or Pro. Determines feature limits (event count, team size, ticket types) and platform fee rates. Managed via Stripe Billing.
+_Avoid_: Plan, package, level
+
+**Platform Fee**:
+A percentage-based fee applied to each paid ticket transaction. Collected via Stripe Connect's `application_fee_amount`. 5% for Free-tier organizations, waived for Pro.
+_Avoid_: Service charge, commission, cut
+
+**Workflow**:
+A user-defined automation graph attached to a single Event. Composed of trigger, action, and control flow nodes connected as a directed acyclic graph (DAG). Stored as JSON. Pro-tier feature only.
+_Avoid_: Automation, pipeline, flow, sequence
+
+**Workflow Execution**:
+A single run of a Workflow, triggered by a domain event matching the Workflow's trigger node. Tracks the status of each node as the execution engine walks the DAG.
+_Avoid_: Run, instance, job
+
+**Check-in**:
+The act of marking an Attendee as physically present at an Event. Performed by scanning the Attendee's QR code or via manual name/email search. Recorded as a timestamp on the Registration.
+_Avoid_: Arrival, attendance, scan

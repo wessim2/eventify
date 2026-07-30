@@ -133,4 +133,24 @@ export class OrganizationController {
   ) {
     return this.organizationService.updateMemberRole(id, targetUserId, dto);
   }
+
+  // ---------------------------------------------------------------------------
+  // Stripe Connect & Billing
+  // ---------------------------------------------------------------------------
+
+  @Post(':id/stripe/connect')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER, Role.ADMIN)
+  connectStripe(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.organizationService.createStripeConnectAccount(id, user.email);
+  }
+
+  @Get(':id/stripe/status')
+  getStripeStatus(@Param('id', ParseUUIDPipe) id: string) {
+    return this.organizationService.getStripeStatus(id);
+  }
 }
