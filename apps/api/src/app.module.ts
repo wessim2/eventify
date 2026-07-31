@@ -1,5 +1,7 @@
 import {
   Module,
+  NestModule,
+  MiddlewareConsumer,
 } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { ConfigModule } from './config/config.module';
@@ -16,6 +18,7 @@ import { EventLifecycleWorkerModule } from './workers/event-lifecycle/event-life
 import { PaymentWorkerModule } from './workers/payment/payment-worker.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { HealthController } from './app.controller';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 
 @Module({
   imports: [
@@ -40,4 +43,8 @@ import { HealthController } from './app.controller';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

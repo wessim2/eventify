@@ -14,6 +14,16 @@
   Custom checkout UI elements for securely capturing card details.
 - [Resend Node.js SDK Documentation](https://resend.com/docs/sdks/node)
   Official Node.js SDK reference for sending transactional HTML emails.
+- [Lens Kubernetes IDE Documentation](https://k8slens.dev/)
+  Desktop application for monitoring pods, streaming container logs, and interactive shell access.
+- [Skaffold Local Kubernetes Development](https://skaffold.dev/)
+  Google open-source tool for live file syncing and continuous K8s development loops.
+- [Skaffold File Sync Mechanics](https://skaffold.dev/docs/pipeline-stages/filesync/)
+  Detailed guide on how Skaffold copies modified source files directly into running pod containers.
+- [Minikube Official Documentation](https://minikube.sigs.k8s.io/docs/)
+  Official Kubernetes SIG guide for local cluster setup, drivers, and addons.
+
+
 
 ## Wisdom (Communities)
 
@@ -23,4 +33,7 @@
   A community of developers building Stripe payment integrations and SaaS marketplaces.
 - [Resend Discord Community](https://resend.com/discord)
   Developer community for transactional email deliverability and email engineering.
+- [Kubernetes Slack Community](https://slack.k8s.io/)
+  Official Slack workspace for Kubernetes developers, cluster operators, and cloud infrastructure engineers.
+
 

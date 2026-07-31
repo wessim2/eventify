@@ -1,0 +1,40 @@
+apiVersion: skaffold/v4beta7
+kind: Config
+metadata:
+  name: eventify-backend-dev
+
+build:
+  artifacts:
+    - image: eventify/api
+      context: .
+      docker:
+        dockerfile: docker/Dockerfile.api
+      sync:
+        infer:
+          - "apps/api/src/**/*.ts"
+          - "packages/shared-types/src/**/*.ts"
+
+manifests:
+  rawYaml:
+    - deploy/k8s/namespace.yaml
+    - deploy/k8s/postgres-deployment.yaml
+    - deploy/k8s/redis-deployment.yaml
+    - deploy/k8s/api-deployment.yaml
+    - deploy/k8s/hpa.yaml
+
+portForward:
+  - resourceType: service
+    resourceName: eventify-api-service
+    namespace: eventify-system
+    port: 3000
+    localPort: 3000
+  - resourceType: service
+    resourceName: postgres-service
+    namespace: eventify-system
+    port: 5432
+    localPort: 5432
+  - resourceType: service
+    resourceName: redis-service
+    namespace: eventify-system
+    port: 6379
+    localPort: 6379

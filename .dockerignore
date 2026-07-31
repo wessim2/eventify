@@ -1,0 +1,14 @@
+# Ignore local dependency folders and build outputs
+**/node_modules
+**/.next
+**/dist
+**/build
+**/.git
+**/.pnpm-store
+**/coverage
+**/.env
+**/.env.local
+**/.turbo
+**/.cache
+tmp
+*.log
