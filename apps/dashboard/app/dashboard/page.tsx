@@ -60,6 +60,29 @@ export default function DashboardHomePage() {
     }
   };
 
+  const handleUpgradeSub = async () => {
+    const orgId = localStorage.getItem('eventify_org_id');
+    if (!orgId) return;
+    try {
+      const res = await apiRequest(`/organizations/${orgId}/subscription/checkout`, 'POST');
+      if (res.url) window.location.href = res.url;
+    } catch (err: any) {
+      alert(err.message || 'Failed to initiate subscription upgrade');
+    }
+  };
+
+  const handleCancelSub = async () => {
+    const orgId = localStorage.getItem('eventify_org_id');
+    if (!orgId) return;
+    if (!confirm('Are you sure you want to cancel your Pro Tier subscription? Your platform fee will revert to 5%.')) return;
+    try {
+      await apiRequest(`/organizations/${orgId}/subscription/cancel`, 'POST');
+      setStripeStatus((prev) => prev ? { ...prev, subscriptionTier: 'FREE' } : null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to cancel subscription');
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '4rem 0', color: '#64748b' }}>
@@ -160,6 +183,68 @@ export default function DashboardHomePage() {
             {connectingStripe ? 'Connecting to Stripe...' : 'Connect Stripe Account 💳'}
           </button>
         )}
+      </div>
+
+      {/* Pro Tier Subscription Billing Card */}
+      <div className="card" style={{
+        padding: '1.5rem 1.75rem',
+        backgroundColor: stripeStatus?.subscriptionTier === 'PRO' ? '#f3e8ff' : '#ffffff',
+        border: stripeStatus?.subscriptionTier === 'PRO' ? '1px solid #c084fc' : '1px solid #e2e8f0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '1rem',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '10px',
+            backgroundColor: stripeStatus?.subscriptionTier === 'PRO' ? '#8b5cf6' : '#64748b',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.25rem',
+          }}>
+            ⭐
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <h4 style={{ fontSize: '1.1rem', fontFamily: 'Outfit', margin: 0, color: '#0f172a' }}>
+                Subscription Tier: {stripeStatus?.subscriptionTier === 'PRO' ? 'Pro Plan ($29/month)' : 'Free Plan (5% Fee)'}
+              </h4>
+              <span style={{
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                padding: '0.2rem 0.5rem',
+                borderRadius: '10px',
+                backgroundColor: stripeStatus?.subscriptionTier === 'PRO' ? '#8b5cf6' : '#e2e8f0',
+                color: stripeStatus?.subscriptionTier === 'PRO' ? '#ffffff' : '#475569',
+              }}>
+                {stripeStatus?.subscriptionTier === 'PRO' ? 'PRO ACTIVE' : 'FREE TIER'}
+              </span>
+            </div>
+            <p style={{ fontSize: '0.875rem', color: '#475569', margin: '0.2rem 0 0 0' }}>
+              {stripeStatus?.subscriptionTier === 'PRO'
+                ? '0% platform fees active on all tickets + Visual Workflow Automation enabled.'
+                : 'Free tier charges 5% platform fee on paid tickets. Upgrade to Pro ($29/mo) for 0% fee.'}
+            </p>
+          </div>
+        </div>
+
+        <div>
+          {stripeStatus?.subscriptionTier === 'PRO' ? (
+            <button onClick={handleCancelSub} className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
+              Downgrade to Free
+            </button>
+          ) : (
+            <button onClick={handleUpgradeSub} className="btn btn-primary" style={{ backgroundColor: '#8b5cf6', borderColor: '#7c3aed' }}>
+              Upgrade to Pro ($29/mo) ⭐
+            </button>
+          )}
+        </div>
       </div>
 
       {/* KPI Stats Grid */}

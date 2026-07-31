@@ -30,6 +30,23 @@ export class EventService {
     organizationId: string,
     dto: CreateEventDto,
   ) {
+    const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    if (org?.subscriptionTier === 'FREE') {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const eventsThisMonth = await this.prisma.event.count({
+        where: {
+          organizationId,
+          createdAt: { gte: startOfMonth },
+        },
+      });
+      if (eventsThisMonth >= 3) {
+        throw new UnprocessableEntityException(
+          'Free tier limit reached: Maximum 3 events per month. Upgrade to Pro ($29/mo) for unlimited event creation.',
+        );
+      }
+    }
+
     const slug = await this.generateSlug(organizationId, dto.title);
 
     return this.prisma.event.create({
@@ -222,6 +239,15 @@ export class EventService {
    */
   async createTicketType(eventId: string, organizationId: string, dto: any) {
     await this.findOne(eventId, organizationId);
+    const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    if (org?.subscriptionTier === 'FREE') {
+      const existingTypesCount = await this.prisma.ticketType.count({ where: { eventId } });
+      if (existingTypesCount >= 2) {
+        throw new UnprocessableEntityException(
+          'Free tier limit reached: Maximum 2 ticket types per event. Upgrade to Pro ($29/mo) for unlimited ticket tiers.',
+        );
+      }
+    }
     return this.prisma.ticketType.create({
       data: {
         eventId,
@@ -242,5 +268,75 @@ export class EventService {
       where: { eventId },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /**
+   * Performs check-in for an attendee registration.
+   * Asserts tenant ownership and prevents duplicate check-ins.
+   */
+  async checkInAttendee(eventId: string, organizationId: string, registrationId: string) {
+    await this.findOne(eventId, organizationId);
+
+    const registration = await this.prisma.registration.findUnique({
+      where: { id: registrationId },
+      include: {
+        user: { select: { firstName: true, lastName: true, email: true } },
+        ticketType: { select: { name: true } },
+      },
+    });
+
+    if (!registration) {
+      throw new NotFoundException('Registration record not found.');
+    }
+
+    if (registration.status !== 'CONFIRMED') {
+      throw new UnprocessableEntityException(`Cannot check in: Booking status is ${registration.status}.`);
+    }
+
+    if (registration.checkedInAt) {
+      const timeStr = new Date(registration.checkedInAt).toLocaleTimeString();
+      throw new UnprocessableEntityException(
+        `Attendee ALREADY checked in at ${timeStr}. Duplicate scan rejected.`,
+      );
+    }
+
+    const updated = await this.prisma.registration.update({
+      where: { id: registrationId },
+      data: { checkedInAt: new Date() },
+    });
+
+    return {
+      success: true,
+      checkedInAt: updated.checkedInAt,
+      registration: {
+        id: registration.id,
+        user: registration.user,
+        ticketType: registration.ticketType,
+      },
+    };
+  }
+
+  /**
+   * Retrieves real-time check-in stats for an event.
+   */
+  async getCheckInStats(eventId: string, organizationId: string) {
+    await this.findOne(eventId, organizationId);
+
+    const [totalRegistrations, checkedInCount] = await Promise.all([
+      this.prisma.registration.count({
+        where: { ticketType: { eventId }, status: 'CONFIRMED' },
+      }),
+      this.prisma.registration.count({
+        where: { ticketType: { eventId }, status: 'CONFIRMED', checkedInAt: { not: null } },
+      }),
+    ]);
+
+    const percent = totalRegistrations > 0 ? Math.round((checkedInCount / totalRegistrations) * 100) : 0;
+
+    return {
+      totalRegistrations,
+      checkedInCount,
+      percentCheckedIn: percent,
+    };
   }
 }

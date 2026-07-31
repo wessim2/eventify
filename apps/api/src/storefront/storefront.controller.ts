@@ -71,4 +71,16 @@ export class StorefrontController {
   ) {
     return this.storefrontService.getRegistration(registrationId, user.userId);
   }
+
+  @Post('checkout/:registrationId/payment-intent')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generate Stripe PaymentIntent for registration checkout' })
+  createPaymentIntent(
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.storefrontService.createPaymentIntent(registrationId, user.userId);
+  }
 }

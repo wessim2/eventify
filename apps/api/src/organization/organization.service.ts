@@ -110,6 +110,17 @@ export class OrganizationService {
       where: { id: invitedByUserId },
     });
 
+    if (org.subscriptionTier === 'FREE') {
+      const activeMembersCount = await this.prisma.organizationMembership.count({
+        where: { organizationId },
+      });
+      if (activeMembersCount >= 2) {
+        throw new UnprocessableEntityException(
+          'Free tier limit reached: Maximum 2 team members per organization. Upgrade to Pro ($29/mo) for unlimited team collaborators.',
+        );
+      }
+    }
+
     // Check if already a member
     const existing = await this.prisma.organizationMembership.findFirst({
       where: { organizationId, user: { email: dto.email } },
@@ -248,7 +259,7 @@ export class OrganizationService {
         const Stripe = require('stripe');
         const stripe = new Stripe(stripeSecret);
         
-        if (!stripeAccountId) {
+        if (!stripeAccountId || stripeAccountId.startsWith('acct_mock_')) {
           const account = await stripe.accounts.create({
             type: 'express',
             email: userEmail,
@@ -274,6 +285,7 @@ export class OrganizationService {
         url = accountLink.url;
       } catch (err: any) {
         this.logger.error(`Stripe connect creation error: ${err.message}`);
+        throw new UnprocessableEntityException(`Stripe Connect error: ${err.message}`);
       }
     } else {
       // Mock onboarding flow for dev/local testing without active Stripe API key
@@ -297,6 +309,77 @@ export class OrganizationService {
       isConnected: !!org.stripeAccountId,
       subscriptionTier: org.subscriptionTier,
     };
+  }
+
+  async createSubscriptionCheckoutSession(organizationId: string) {
+    const org = await this.findById(organizationId);
+
+    const stripeSecret = process.env.STRIPE_SECRET_KEY;
+    if (stripeSecret && stripeSecret.startsWith('sk_')) {
+      try {
+        const Stripe = require('stripe');
+        const stripe = new Stripe(stripeSecret);
+
+        let customerId = org.stripeCustomerId;
+        if (!customerId) {
+          const customer = await stripe.customers.create({
+            name: org.name,
+            metadata: { organizationId: org.id },
+          });
+          customerId = customer.id;
+          await this.prisma.organization.update({
+            where: { id: organizationId },
+            data: { stripeCustomerId: customerId },
+          });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+          customer: customerId,
+          mode: 'subscription',
+          payment_method_types: ['card'],
+          line_items: [
+            {
+              price_data: {
+                currency: 'usd',
+                product_data: {
+                  name: 'Eventify Pro Tier Subscription',
+                  description: '0% Platform fee on tickets + Visual Workflow Automation Builder',
+                },
+                unit_amount: 2900,
+                recurring: { interval: 'month' },
+              },
+              quantity: 1,
+            },
+          ],
+          success_url: `${process.env.DASHBOARD_URL || 'http://localhost:3001'}/dashboard?sub=success`,
+          cancel_url: `${process.env.DASHBOARD_URL || 'http://localhost:3001'}/dashboard?sub=cancel`,
+          metadata: { organizationId: org.id },
+        });
+
+        return { url: session.url };
+      } catch (err: any) {
+        this.logger.error(`Stripe Checkout Session error: ${err.message}`);
+      }
+    }
+
+    // Dev/Mock Instant Upgrade Fallback
+    const updated = await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: { subscriptionTier: 'PRO' },
+    });
+
+    return {
+      url: `${process.env.DASHBOARD_URL || 'http://localhost:3001'}/dashboard?sub=success_mock`,
+      subscriptionTier: updated.subscriptionTier,
+    };
+  }
+
+  async cancelSubscription(organizationId: string) {
+    const updated = await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: { subscriptionTier: 'FREE' },
+    });
+    return { subscriptionTier: updated.subscriptionTier };
   }
 
   // ---------------------------------------------------------------------------

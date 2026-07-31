@@ -41,3 +41,5 @@ coverage/
 *.md
 
 .agents/
+lessons/
+reference/

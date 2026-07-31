@@ -153,4 +153,20 @@ export class OrganizationController {
   getStripeStatus(@Param('id', ParseUUIDPipe) id: string) {
     return this.organizationService.getStripeStatus(id);
   }
+
+  @Post(':id/subscription/checkout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER)
+  createSubscriptionCheckout(@Param('id', ParseUUIDPipe) id: string) {
+    return this.organizationService.createSubscriptionCheckoutSession(id);
+  }
+
+  @Post(':id/subscription/cancel')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER)
+  cancelSubscription(@Param('id', ParseUUIDPipe) id: string) {
+    return this.organizationService.cancelSubscription(id);
+  }
 }

@@ -26,9 +26,16 @@ export class TenantGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
-    const organizationId = request.headers['x-organization-id'] as
-      | string
-      | undefined;
+    // Skip tenant membership check when user is accepting an invitation to join an org
+    if (request.path?.includes('/invitations/') && request.path?.endsWith('/accept')) {
+      return true;
+    }
+
+    const organizationId = (
+      request.headers['x-organization-id'] ||
+      request.params?.id ||
+      request.params?.organizationId
+    ) as string | undefined;
 
     if (!organizationId) {
       return true;

@@ -131,6 +131,28 @@ export class EventController {
     return this.eventService.findTicketTypes(id, req.tenantId!);
   }
 
+  @Post(':id/check-in/:registrationId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles(Role.OWNER, Role.ADMIN, Role.MEMBER)
+  checkInAttendee(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Request() req: RequestWithUser,
+  ) {
+    this.requireTenantContext(req);
+    return this.eventService.checkInAttendee(id, req.tenantId!, registrationId);
+  }
+
+  @Get(':id/check-in/stats')
+  getCheckInStats(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: RequestWithUser,
+  ) {
+    this.requireTenantContext(req);
+    return this.eventService.getCheckInStats(id, req.tenantId!);
+  }
+
   private requireTenantContext(req: RequestWithUser): void {
     if (!req.tenantId) {
       throw new ForbiddenException(

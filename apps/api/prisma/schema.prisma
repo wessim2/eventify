@@ -218,6 +218,8 @@ model Registration {
   userId          String             @map("user_id") @db.Uuid
   status          RegistrationStatus @default(PENDING)
   paymentIntentId String?            @map("payment_intent_id")
+  qrCodeData      String?            @map("qr_code_data") @db.Text
+  checkedInAt     DateTime?          @map("checked_in_at")
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 

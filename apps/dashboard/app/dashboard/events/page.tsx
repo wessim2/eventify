@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../../lib/api';
+import Link from 'next/link';
 
 interface Event {
   id: string;
@@ -197,7 +198,7 @@ export default function EventsManagerPage() {
 
       {/* Main Layout: Master Event List (Left) & Detail Inspector (Right) */}
       <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.75rem', flex: 1, alignItems: 'start' }}>
-        
+
         {/* Left Pane: Master Events List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* Search & Filter Options */}
@@ -264,14 +265,14 @@ export default function EventsManagerPage() {
                           event.status === 'PUBLISHED'
                             ? '#d1fae5'
                             : event.status === 'DRAFT'
-                            ? '#f1f5f9'
-                            : '#fee2e2',
+                              ? '#f1f5f9'
+                              : '#fee2e2',
                         color:
                           event.status === 'PUBLISHED'
                             ? '#065f46'
                             : event.status === 'DRAFT'
-                            ? '#475569'
-                            : '#991b1b',
+                              ? '#475569'
+                              : '#991b1b',
                       }}
                     >
                       {event.status}
@@ -333,6 +334,14 @@ export default function EventsManagerPage() {
                       <option value="CANCELLED">CANCELLED</option>
                     </select>
                   </div>
+
+                  <Link
+                    href={`/dashboard/events/${selectedEvent.id}/check-in`}
+                    className="btn btn-primary"
+                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', backgroundColor: '#0f766e', borderColor: '#0f766e' }}
+                  >
+                    Event Check-in Portal 🎟️
+                  </Link>
 
                   {orgSlug && selectedEvent.status === 'PUBLISHED' && (
                     <a
@@ -447,14 +456,14 @@ export default function EventsManagerPage() {
                                     reg.status === 'CONFIRMED'
                                       ? '#d1fae5'
                                       : reg.status === 'PENDING'
-                                      ? '#fef3c7'
-                                      : '#fee2e2',
+                                        ? '#fef3c7'
+                                        : '#fee2e2',
                                   color:
                                     reg.status === 'CONFIRMED'
                                       ? '#065f46'
                                       : reg.status === 'PENDING'
-                                      ? '#d97706'
-                                      : '#991b1b',
+                                        ? '#d97706'
+                                        : '#991b1b',
                                 }}
                               >
                                 {reg.status}
